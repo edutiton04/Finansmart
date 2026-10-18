@@ -194,7 +194,7 @@ views.cartoes = () => {
 };
 
 views.fixos = () => {
-  const list = state.fixed.filter(f => f.start <= ui.month).sort((a, b) => a.dueDay - b.dueDay);
+  const list = state.fixed.filter(f => f.start <= ui.month && (!f.end || f.end >= ui.month)).sort((a, b) => a.dueDay - b.dueDay);
   let planned = 0, paid = 0;
   const rows = list.map(f => {
     const due = Fin.dueDate(f, ui.month), tx = Fin.fixedPaid(state, f, ui.month); planned += tx ? tx.amount : f.amount; if (tx) paid += tx.amount;
@@ -257,12 +257,13 @@ function fixedModal(f = {}) {
     <label>Valor mensal (R$)<input name="amount" inputmode="decimal" value="${mv(f.amount)}"></label>
     <label>Dia de vencimento (1–31)<input name="dueDay" inputmode="numeric" value="${f.dueDay || ''}"></label>
     <label>Começa em<input type="month" name="start" value="${f.start || ui.month}"></label>
+    <label>Termina em (opcional, para parcelas)<input type="month" name="end" value="${f.end || ''}"></label>
     <label>Categoria<select name="categoryId">${expCats(f.categoryId)}</select></label>
     <label>Conta de pagamento<select name="accountId">${accOpts(f.accountId)}</select></label>`, async fd => {
     const description = fd.get('description').trim(), amount = Fin.parseMoney(fd.get('amount')), dueDay = int(fd.get('dueDay'), 1, 31);
     if (!description) return 'Informe a descrição.'; if (!amount || amount <= 0) return 'Informe um valor válido.';
-    if (!dueDay) return 'Dia de vencimento deve estar entre 1 e 31.'; if (!fd.get('start')) return 'Informe o mês de início.';
-    upsert(state.fixed, { id: f.id || Store.uid(), description, kind: fd.get('kind'), amount, dueDay, start: fd.get('start'), categoryId: fd.get('categoryId'), accountId: fd.get('accountId') });
+    if (!dueDay) return 'Dia de vencimento deve estar entre 1 e 31.'; if (!fd.get('start')) return 'Informe o mês de início.'; if (fd.get('end') && fd.get('end') < fd.get('start')) return 'O mês final não pode ser anterior ao início.';
+    upsert(state.fixed, { id: f.id || Store.uid(), description, kind: fd.get('kind'), amount, dueDay, start: fd.get('start'), ...(fd.get('end') ? { end: fd.get('end') } : {}), categoryId: fd.get('categoryId'), accountId: fd.get('accountId') });
   });
 }
 const find = (arr, id) => arr.find(x => x.id === id);
@@ -398,7 +399,7 @@ const ATT_TYPES = ['image/jpeg', 'image/png', 'application/pdf'], ATT_MAX = 5 * 
 function importModal() {
   if (!state.accounts.length) return toast('Cadastre uma conta antes de importar.');
   let rows = null;
-  const readMap = f => ({ date: +f.cDate.value, desc: +f.cDesc.value, amount: +f.cAmount.value, type: +f.cType.value, cat: +f.cCat.value, invert: f.invert.checked, accountId: f.accountId.value });
+  const readMap = f => ({ date: +f.cDate.value, desc: +f.cDesc.value, amount: +f.cAmount.value, type: +f.cType.value, cat: +f.cCat.value, invert: f.invert.checked, accountId: f.accountId.value, fixed: f.cFixed ? +f.cFixed.value : -1, end: f.cEnd ? +f.cEnd.value : -1 });
   const f = openModal('Importar planilha', `
     <p class="label">Aceita .xlsx (primeira aba) e .csv, com cabeçalho na primeira linha. Sem coluna de tipo, valor negativo = despesa. <button type="button" class="btn sm" data-action="tplCsv">Baixar modelo</button></p>
     <label>Arquivo<input type="file" name="file" accept=".xlsx,.csv,.txt"></label>
@@ -406,11 +407,11 @@ function importModal() {
     if (!rows) return 'Selecione um arquivo.';
     const m = readMap(f); if (m.date < 0 || m.desc < 0 || m.amount < 0) return 'Associe as colunas Data, Descrição e Valor.';
     const res = Importer.mapRows(state, rows, m); if (!res.items.length) return 'Nenhuma linha válida para importar.';
-    state.transactions.push(...res.items); toast(`${res.items.length} movimentações importadas.`, true);
+    state.transactions.push(...res.items); state.fixed.push(...res.fixed); toast(`${res.items.length} movimentações importadas${res.fixed.length ? ` e ${res.fixed.length} gastos fixos criados` : ''}.`, true);
   });
   const prev = () => {
     if (!rows || !$('#prev')) return; const r = Importer.mapRows(state, rows, readMap(f));
-    $('#prev').innerHTML = `<p class="label"><b>${r.items.length}</b> válidas · ${r.dups} já existentes (ignoradas) · ${r.bad} inválidas (ignoradas)</p>` + (r.items.length ? `<div class="tablewrap"><table><tbody>${r.items.slice(0, 5).map(t => `<tr><td>${Fin.fmtDate(t.date)}</td><td>${esc(t.description)}</td><td class="r ${t.type === 'income' ? 'inc' : 'exp'}">${Fin.fmt(t.amount)}</td></tr>`).join('')}</tbody></table></div>` : '');
+    $('#prev').innerHTML = `<p class="label"><b>${r.items.length}</b> válidas · ${r.fixed.length ? `${r.fixed.length} novos gastos fixos · ` : ''}${r.dups} já existentes (ignoradas) · ${r.bad} inválidas (ignoradas)</p>` + (r.items.length ? `<div class="tablewrap"><table><tbody>${r.items.slice(0, 5).map(t => `<tr><td>${Fin.fmtDate(t.date)}</td><td>${esc(t.description)}</td><td class="r ${t.type === 'income' ? 'inc' : 'exp'}">${Fin.fmt(t.amount)}</td></tr>`).join('')}</tbody></table></div>` : '');
   };
   f.file.onchange = async () => {
     const file = f.file.files[0]; rows = null; $('#imp').innerHTML = ''; $('#err').textContent = ''; if (!file) return;
@@ -418,7 +419,7 @@ function importModal() {
     if (rows.length < 2) { rows = null; $('#err').textContent = 'A planilha está vazia ou só tem o cabeçalho.'; return; }
     const d = Importer.detect(rows[0].map(Importer.norm));
     const sel = (name, label, idx, optional) => `<label>${label}<select name="${name}">${optional ? '<option value="-1">— não usar —</option>' : ''}${rows[0].map((x, i) => `<option value="${i}" ${i === idx ? 'selected' : ''}>${esc(x || 'Coluna ' + (i + 1))}</option>`).join('')}</select></label>`;
-    $('#imp').innerHTML = sel('cDate', 'Coluna da data', d.date) + sel('cDesc', 'Coluna da descrição', d.desc) + sel('cAmount', 'Coluna do valor', d.amount) + sel('cType', 'Coluna do tipo (opcional: receita/despesa, crédito/débito)', d.type, true) + sel('cCat', 'Coluna da categoria (opcional)', d.cat, true)
+    $('#imp').innerHTML = sel('cDate', 'Coluna da data', d.date) + sel('cDesc', 'Coluna da descrição', d.desc) + sel('cAmount', 'Coluna do valor', d.amount) + sel('cType', 'Coluna do tipo (opcional: receita/despesa, crédito/débito)', d.type, true) + sel('cCat', 'Coluna da categoria (opcional)', d.cat, true) + sel('cFixed', 'Coluna "fixo" (opcional: Sim = gasto fixo recorrente)', d.fixed, true) + sel('cEnd', 'Coluna do último mês do fixo (opcional, MM/AAAA)', d.end, true)
       + '<label><input type="checkbox" name="invert" style="width:auto"> Inverter sinal (positivo = despesa)</label><div id="prev"></div>';
     prev();
   };

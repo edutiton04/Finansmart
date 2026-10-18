@@ -80,11 +80,12 @@ const Importer = (() => {
     if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
     return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   }
-  const detect = h => { const f = re => h.findIndex(x => re.test(x)); return { date: f(/data|date/), desc: f(/descri|hist|estab|lancamento|memo/), amount: f(/valor|amount|quantia/), type: f(/^tipo|type|natureza/), cat: f(/categor/) }; };
+  const detect = h => { const f = re => h.findIndex(x => re.test(x)); return { date: f(/data|date/), desc: f(/descri|hist|estab|lancamento|memo/), amount: f(/valor|amount|quantia/), type: f(/^tipo|type|natureza/), cat: f(/categor/), fixed: f(/^fixo|recorrente/), end: f(/^ate$|^fim|termina/) }; };
 
   // m = { date, desc, amount, type, cat (índices de coluna, -1 = não usar), invert, accountId }
   function mapRows(state, rows, m) {
-    const out = { items: [], bad: 0, dups: 0 };
+    const out = { items: [], fixed: [], bad: 0, dups: 0 }, last = new Map(); // fixed: novos gastos fixos criados pela importação
+    const yes = v => /^(s|sim|x|1|true|fixo)$/.test(norm(v)), ymOf = v => { const a = String(v ?? '').trim().match(/^(\d{1,2})\/(\d{4})$/), b = String(v ?? '').trim().match(/^(\d{4})-(\d{2})$/); return a ? `${a[2]}-${a[1].padStart(2, '0')}` : b ? b[0] : ''; };
     const existing = new Set(state.transactions.filter(t => t.accountId === m.accountId).map(t => `${t.date}|${t.amount}|${t.type}|${t.description.toLowerCase()}`));
     for (const r of rows.slice(1)) {
       const date = toDate(r[m.date]), cents = toMoney(r[m.amount]), description = String(r[m.desc] ?? '').trim();
@@ -96,7 +97,17 @@ const Importer = (() => {
       if (existing.has(`${date}|${amount}|${type}|${description.toLowerCase()}`)) { out.dups++; continue; }
       const cn = m.cat >= 0 ? norm(r[m.cat]) : '';
       const cat = state.categories.find(c => c.kind === type && norm(c.name) === cn) || state.categories.find(c => c.kind === type && c.name.startsWith('Outras'));
-      out.items.push({ id: Store.uid(), type, description, amount, date, accountId: m.accountId, categoryId: cat?.id });
+      const item = { id: Store.uid(), type, description, amount, date, accountId: m.accountId, categoryId: cat?.id };
+      if (m.fixed >= 0 && type === 'expense' && yes(r[m.fixed])) { // linha marcada como gasto fixo: cria (ou reaproveita) o fixo e liga o lançamento ao mês
+        const ym = date.slice(0, 7), key = norm(description);
+        let fx = out.fixed.find(x => norm(x.description) === key) || (state.fixed || []).find(x => norm(x.description) === key && x.accountId === m.accountId);
+        if (fx && (state.transactions.some(t => t.fixedId === fx.id && t.fixedMonth === ym) || out.items.some(t => t.fixedId === fx.id && t.fixedMonth === ym))) { out.dups++; continue; }
+        if (!fx) { fx = { id: Store.uid(), description, kind: 'Conta mensal', amount, dueDay: Number(date.slice(8)), start: ym, categoryId: cat?.id, accountId: m.accountId }; out.fixed.push(fx); last.set(fx.id, ym); }
+        else if (out.fixed.includes(fx)) { if (ym < fx.start) fx.start = ym; if (ym > last.get(fx.id)) { last.set(fx.id, ym); fx.amount = amount; } }
+        const end = m.end >= 0 ? ymOf(r[m.end]) : ''; if (end && out.fixed.includes(fx)) fx.end = end;
+        item.fixedId = fx.id; item.fixedMonth = ym;
+      }
+      out.items.push(item);
     }
     return out;
   }

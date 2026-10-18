@@ -112,7 +112,7 @@ const Fin = {
     const cur = Fin.currentMonth(), avg = Fin.averages(state, cur); let balance = Fin.totalBalance(state); const rows = [];
     for (let i = 0; i < n; i++) {
       const ym = Fin.shiftMonth(cur, i);
-      const fixed = state.fixed.filter(f => f.start <= ym && !Fin.fixedPaid(state, f, ym)).reduce((s, f) => s + f.amount, 0);
+      const fixed = state.fixed.filter(f => f.start <= ym && (!f.end || f.end >= ym) && !Fin.fixedPaid(state, f, ym)).reduce((s, f) => s + f.amount, 0);
       const invoices = Fin.openInvoices(state, ym) + (i === 0 ? Fin.pastOpenInvoices(state, cur) : 0);
       const income = i === 0 ? 0 : avg.income, variable = i === 0 ? 0 : avg.variable, result = income - fixed - invoices - variable;
       balance += result; rows.push({ ym, income, fixed, invoices, variable, result, balance });
