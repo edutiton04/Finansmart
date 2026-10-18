@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FinanSmart — Gestão financeira pessoal</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<aside class="side">
+  <div class="brand">Finan<span>Smart</span></div>
+  <nav class="nav">
+    <a href="#dashboard" data-r="dashboard">📊 <b>Dashboard</b></a>
+    <a href="#movimentacoes" data-r="movimentacoes">💸 <b>Movimentações</b></a>
+    <a href="#contas" data-r="contas">🏦 <b>Contas</b></a>
+    <a href="#cartoes" data-r="cartoes">💳 <b>Cartões</b></a>
+    <a href="#fixos" data-r="fixos">🔁 <b>Fixos</b></a>
+    <a href="#investimentos" data-r="investimentos">📈 <b>Investimentos</b></a>
+    <a href="#planejamento" data-r="planejamento">🎯 <b>Planejamento</b></a>
+    <a href="#relatorios" data-r="relatorios">📑 <b>Relatórios</b></a>
+  </nav>
+</aside>
+<main>
+  <header class="top">
+    <h1 id="title">Dashboard</h1>
+    <div class="monthnav" id="monthnav">
+      <button class="btn ghost" data-action="prevMonth" aria-label="Mês anterior">‹</button>
+      <input type="month" id="monthlabel" aria-label="Escolher mês">
+      <button class="btn ghost" data-action="nextMonth" aria-label="Próximo mês">›</button>
+    </div>
+    <button class="btn ghost" data-action="backup" aria-label="Backup" title="Backup">💾</button>
+    <button class="btn ghost" data-action="theme" aria-label="Alternar tema">🌓</button>
+    <button class="btn ghost" id="logout" hidden>Sair</button>
+  </header>
+  <!-- Prévia decorativa (sem dados reais): aparece desfocada atrás do login e é substituída pelo app. -->
+  <div id="view">
+    <section class="grid cards">
+      <div class="card"><div class="label">Saldo disponível</div><div class="value">R$ 12.480,00</div></div>
+      <div class="card"><div class="label">Receitas do mês</div><div class="value inc">R$ 6.200,00</div></div>
+      <div class="card"><div class="label">Despesas do mês</div><div class="value exp">R$ 3.870,00</div></div>
+      <div class="card"><div class="label">Patrimônio líquido</div><div class="value">R$ 41.900,00</div></div>
+    </section>
+    <section class="grid two">
+      <div class="card"><h3>Receitas x Despesas</h3><div class="bars">
+        <div class="bargroup"><div class="barpair"><i class="bar" style="height:70%"></i><i class="bar e" style="height:45%"></i></div></div>
+        <div class="bargroup"><div class="barpair"><i class="bar" style="height:85%"></i><i class="bar e" style="height:60%"></i></div></div>
+        <div class="bargroup"><div class="barpair"><i class="bar" style="height:60%"></i><i class="bar e" style="height:70%"></i></div></div>
+        <div class="bargroup"><div class="barpair"><i class="bar" style="height:90%"></i><i class="bar e" style="height:50%"></i></div></div>
+        <div class="bargroup"><div class="barpair"><i class="bar" style="height:75%"></i><i class="bar e" style="height:55%"></i></div></div></div></div>
+      <div class="card"><h3>Despesas por categoria</h3>
+        <div class="row"><span>Moradia</span><b>R$ 1.500,00</b></div><div class="track"><i style="width:80%"></i></div>
+        <div class="row"><span>Alimentação</span><b>R$ 900,00</b></div><div class="track"><i style="width:50%"></i></div>
+        <div class="row"><span>Transporte</span><b>R$ 400,00</b></div><div class="track"><i style="width:25%"></i></div></div>
+    </section>
+  </div>
+</main>
+
+<div id="gate" hidden>
+  <form class="gatecard" id="gform" novalidate>
+    <div class="brand">Finan<span>Smart</span></div>
+    <div class="gtabs"><button type="button" class="on" data-mode="login">Entrar</button><button type="button" data-mode="signup">Criar conta</button></div>
+    <label>E-mail<input type="email" id="gemail" autocomplete="email"></label>
+    <label>Senha<input type="password" id="gpass" autocomplete="current-password"></label>
+    <label id="gconf" hidden>Confirmar senha<input type="password" id="gpass2" autocomplete="new-password"></label>
+    <p class="err" id="gerr" role="alert"></p>
+    <button class="btn primary" id="gsubmit">Entrar</button>
+    <button type="button" class="btn" id="greset">Esqueci minha senha</button>
+  </form>
+</div>
+<dialog id="modal"></dialog>
+<div id="toast"></div>
+<script src="js/storage.js"></script>
+<script src="js/finance.js"></script>
+<script src="js/importer.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/firebase-adapter.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>
