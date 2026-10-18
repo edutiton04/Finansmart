@@ -1,4 +1,4 @@
-/* Interface do FinanSmart. Regras em js/finance.js, persistência em js/storage.js. */
+/* Interface do FinanSmart. Regras em finance.js, persistência em storage.js (ou firebase-adapter.js com login). */
 (async () => {
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -17,7 +17,7 @@ const migrate = () => ['cards', 'cardTx', 'invoicePayments', 'fixed', 'investmen
 migrate();
 const ui = { month: Fin.currentMonth(), f: { type: '', cat: '', acc: '', q: '' } };
 const toast = (msg, ok) => { const t = $('#toast'); t.textContent = msg; t.style.background = ok ? 'var(--inc)' : 'var(--exp)'; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3500); };
-const save = async () => { if (!(await Store.save(state))) toast('Não foi possível salvar os dados no navegador.'); };
+const save = async () => { if (!(await Store.save(state))) toast('Não foi possível salvar os dados. Verifique a conexão e tente de novo.'); };
 const catName = id => state.categories.find(c => c.id === id)?.name || 'Sem categoria';
 const accName = id => state.accounts.find(a => a.id === id)?.name || '—';
 const byDate = (a, b) => b.date.localeCompare(a.date);

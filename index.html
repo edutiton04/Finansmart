@@ -82,7 +82,7 @@ setTimeout(function () {
   if (document.body.dataset.ready || (gate && !gate.hidden)) return;
   var m = window.__missing || [], d = document.createElement('div');
   d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#be123c;color:#fff;padding:12px 16px;font:14px system-ui,sans-serif';
-  d.textContent = 'O FinanSmart não carregou. ' + (m.length ? 'Arquivos não encontrados no site: ' + m.join(', ') + '. ' : '') + 'Confira se index.html, style.css, script.js e a pasta js (6 arquivos) estão na mesma pasta do repositório.';
+  d.textContent = 'O FinanSmart não carregou. ' + (m.length ? 'Arquivos não encontrados no site: ' + m.join(', ') + '. ' : '') + 'Confira se todos os arquivos (index.html, style.css, script.js, boot.js, storage.js, finance.js, importer.js, firebase-config.js e firebase-adapter.js) estão na mesma pasta do repositório.';
   document.body.appendChild(d);
 }, 4000);
 </script>
