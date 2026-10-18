@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./banner.sg" alt="FinanSmart — gestão financeira pessoal" width="100%">
+  <img src="./banner.svg" alt="FinanSmart — gestão financeira pessoal" width="100%">
 </p>
 
 # 💰 FinanSmart
