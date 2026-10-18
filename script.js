@@ -499,5 +499,5 @@ document.addEventListener('input', e => {
   ui.f[k] = e.target.value; $('#txlist').innerHTML = txListHtml();
 });
 window.addEventListener('hashchange', render);
-applyTheme(); await save(); render();
+applyTheme(); await save(); render(); document.body.dataset.ready = '1';
 })();

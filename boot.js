@@ -2,7 +2,7 @@
 (async () => {
   const $ = s => document.querySelector(s), cfg = window.FINANSMART_FIREBASE;
   const configured = !!(cfg && cfg.apiKey && !/^COLE/.test(cfg.apiKey));
-  const startApp = () => new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'script.js'; s.onload = res; s.onerror = () => rej(new Error('Falha ao carregar script.js')); document.body.append(s); });
+  const startApp = () => new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'script.js'; s.onload = res; s.onerror = () => { (window.__missing = window.__missing || []).push('script.js'); rej(new Error('Falha ao carregar script.js')); }; document.body.append(s); });
   if (!configured) return startApp();
 
   document.documentElement.dataset.theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';

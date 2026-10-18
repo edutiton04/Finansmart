@@ -1,6 +1,6 @@
 # Firebase (projeto novo) — login e sincronização do FinanSmart
 
-Sem Firebase configurado, o app roda em modo local, sem login. Com a configuração colada em `js/firebase-config.js`, aparece a tela de **Entrar / Criar conta** e os dados passam a ser salvos na sua conta (Firestore), por usuário.
+Sem Firebase configurado, o app roda em modo local, sem login. Com a configuração colada em `firebase-config.js`, aparece a tela de **Entrar / Criar conta** e os dados passam a ser salvos na sua conta (Firestore), por usuário.
 
 ## 1. Criar o projeto
 1. Em https://console.firebase.google.com clique em **Adicionar projeto** (ex.: `finansmart`). Plano **Spark**, sem cartão. O Google Analytics pode ficar desativado.
@@ -23,7 +23,7 @@ service cloud.firestore {
 Cada usuário só acessa `users/<seu uid>/...`. Todo o resto fica bloqueado.
 
 ## 3. Configurar o app
-Abra `js/firebase-config.js` e troque os valores pelos do passo 1.4. A `apiKey` do Firebase Web não é segredo (pode ir para o GitHub); quem protege os dados são as regras acima. Opcional: no Google Cloud Console, restrinja a chave a `https://SEU-USUARIO.github.io/*`.
+Abra `firebase-config.js` e troque os valores pelos do passo 1.4. A `apiKey` do Firebase Web não é segredo (pode ir para o GitHub); quem protege os dados são as regras acima. Opcional: no Google Cloud Console, restrinja a chave a `https://SEU-USUARIO.github.io/*`.
 
 ## 4. Autorizar o domínio
 **Authentication → Configurações → Domínios autorizados → Adicionar domínio**: `SEU-USUARIO.github.io`. (`localhost` já vem autorizado.)

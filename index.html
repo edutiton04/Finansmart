@@ -69,11 +69,22 @@
 </div>
 <dialog id="modal"></dialog>
 <div id="toast"></div>
-<script src="js/storage.js"></script>
-<script src="js/finance.js"></script>
-<script src="js/importer.js"></script>
-<script src="js/firebase-config.js"></script>
-<script src="js/firebase-adapter.js"></script>
-<script src="js/boot.js"></script>
+<script src="storage.js" onerror="(window.__missing=window.__missing||[]).push('storage.js')"></script>
+<script src="finance.js" onerror="(window.__missing=window.__missing||[]).push('finance.js')"></script>
+<script src="importer.js" onerror="(window.__missing=window.__missing||[]).push('importer.js')"></script>
+<script src="firebase-config.js" onerror="(window.__missing=window.__missing||[]).push('firebase-config.js')"></script>
+<script src="firebase-adapter.js" onerror="(window.__missing=window.__missing||[]).push('firebase-adapter.js')"></script>
+<script src="boot.js" onerror="(window.__missing=window.__missing||[]).push('boot.js')"></script>
+<script>
+/* Aviso de diagnóstico: se o app não iniciar, mostra quais arquivos não foram encontrados no site. */
+setTimeout(function () {
+  var gate = document.getElementById('gate');
+  if (document.body.dataset.ready || (gate && !gate.hidden)) return;
+  var m = window.__missing || [], d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:0;right:0;top:0;z-index:99;background:#be123c;color:#fff;padding:12px 16px;font:14px system-ui,sans-serif';
+  d.textContent = 'O FinanSmart não carregou. ' + (m.length ? 'Arquivos não encontrados no site: ' + m.join(', ') + '. ' : '') + 'Confira se index.html, style.css, script.js e a pasta js (6 arquivos) estão na mesma pasta do repositório.';
+  document.body.appendChild(d);
+}, 4000);
+</script>
 </body>
 </html>
