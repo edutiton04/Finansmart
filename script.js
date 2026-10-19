@@ -13,11 +13,14 @@ if (!state) {
     accounts: [{ id: Store.uid(), name: 'Carteira', type: 'Carteira', initial: 0 }],
     categories: CATS.map(([kind, name]) => ({ id: Store.uid(), kind, name })), transactions: [] };
 }
-const migrate = () => ['cards', 'cardTx', 'invoicePayments', 'fixed', 'investments', 'invTx', 'budgets', 'goals'].forEach(k => state[k] ||= []); // completa dados de versões anteriores
+const migrate = () => {
+  ['cards', 'cardTx', 'invoicePayments', 'fixed', 'investments', 'invTx', 'budgets', 'goals'].forEach(k => state[k] ||= []); // completa dados de versões anteriores
+  for (const p of state.cardTx) if (!p.first) { const c = state.cards.find(x => x.id === p.cardId); if (c) p.first = Fin.invoiceKey(c, p.date); } // fixa a fatura de compras antigas
+};
 migrate();
 const ui = { month: Fin.currentMonth(), f: { type: '', cat: '', acc: '', q: '' } };
 const toast = (msg, ok) => { const t = $('#toast'); t.textContent = msg; t.style.background = ok ? 'var(--inc)' : 'var(--exp)'; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3500); };
-const save = async () => { if (!(await Store.save(state))) toast('Não foi possível salvar os dados. Verifique a conexão e tente de novo.'); };
+const save = async () => { Fin.invalidate(state); if (!(await Store.save(state))) toast('Não foi possível salvar os dados. Verifique a conexão e tente de novo.'); };
 const catName = id => state.categories.find(c => c.id === id)?.name || 'Sem categoria';
 const accName = id => state.accounts.find(a => a.id === id)?.name || '—';
 const byDate = (a, b) => b.date.localeCompare(a.date);
@@ -79,9 +82,10 @@ function txListHtml() {
 }
 const titles = { dashboard: 'Dashboard', movimentacoes: 'Movimentações', contas: 'Contas bancárias' };
 function render() {
+  Fin.invalidate(state);
   const r = views[location.hash.slice(1)] ? location.hash.slice(1) : 'dashboard';
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.r === r));
-  $('#title').textContent = titles[r]; $('#monthnav').hidden = r === 'contas';
+  $('#title').textContent = titles[r]; $('#monthnav').hidden = r === 'contas' || r === 'categorias';
   $('#monthlabel').value = ui.month; $('#view').innerHTML = views[r]();
 }
 
@@ -96,6 +100,7 @@ function openModal(title, body, onSave, label = 'Salvar') {
     catch (x) { console.error(x); $('#err').textContent = 'Erro inesperado ao salvar.'; }
   };
   d.querySelector('[data-close]').onclick = () => d.close();
+  if (!MONTH_OK) f.querySelectorAll('input[type=month]').forEach(i => { i.type = 'text'; i.placeholder = 'AAAA-MM'; i.maxLength = 7; });
   d.showModal(); return f;
 }
 const opts = (list, sel) => list.map(([v, l]) => `<option value="${v}" ${v === sel ? 'selected' : ''}>${esc(l)}</option>`).join('');
@@ -199,7 +204,7 @@ views.fixos = () => {
   const rows = list.map(f => {
     const due = Fin.dueDate(f, ui.month), tx = Fin.fixedPaid(state, f, ui.month); planned += tx ? tx.amount : f.amount; if (tx) paid += tx.amount;
     const st = tx ? `<b class="inc">Pago em ${Fin.fmtDate(tx.date)}</b>` : due < Fin.today() ? '<b class="exp">Atrasado</b>' : 'Pendente';
-    return `<tr><td>${esc(f.description)}</td><td>${f.kind}</td><td>${Fin.fmtDate(due)}</td><td>${esc(catName(f.categoryId))}</td><td class="r">${Fin.fmt(tx ? tx.amount : f.amount)}</td><td>${st}</td>
+    return `<tr><td>${esc(f.description)}</td><td>${esc(f.kind)}</td><td>${Fin.fmtDate(due)}</td><td>${esc(catName(f.categoryId))}</td><td class="r">${Fin.fmt(tx ? tx.amount : f.amount)}</td><td>${st}</td>
       <td class="r">${tx ? `<button class="btn sm" data-action="unpayFixed" data-id="${f.id}">Desfazer</button>` : `<button class="btn sm primary" data-action="payFixed" data-id="${f.id}">Pagar</button>`} <button class="btn sm" data-action="editFixed" data-id="${f.id}">Editar</button> <button class="btn sm danger" data-action="delFixed" data-id="${f.id}">Excluir</button></td></tr>`;
   }).join('');
   return `<div class="head"><span class="sp"></span><button class="btn primary" data-action="newFixed">+ Novo gasto fixo</button></div>
@@ -232,7 +237,9 @@ function purchaseModal(p = {}, cardId) {
     if (!description) return 'Informe a descrição.'; if (!total || total <= 0) return 'Informe um valor válido.';
     if (!n) return 'Número de parcelas deve estar entre 1 e 48.'; if (total < n) return 'Valor muito baixo para esse número de parcelas.';
     if (!fd.get('date')) return 'Informe a data.';
-    upsert(state.cardTx, { id: p.id || Store.uid(), cardId: fd.get('cardId'), description, total, installments: n, date: fd.get('date'), categoryId: fd.get('categoryId') });
+    const card = state.cards.find(c => c.id === fd.get('cardId'));
+    if (!card) return 'Selecione um cartão.';
+    upsert(state.cardTx, { id: p.id || Store.uid(), cardId: card.id, description, total, installments: n, date: fd.get('date'), categoryId: fd.get('categoryId'), first: Fin.invoiceKey(card, fd.get('date')) });
   });
 }
 function payModal(cardId) {
@@ -262,7 +269,7 @@ function fixedModal(f = {}) {
     <label>Conta de pagamento<select name="accountId">${accOpts(f.accountId)}</select></label>`, async fd => {
     const description = fd.get('description').trim(), amount = Fin.parseMoney(fd.get('amount')), dueDay = int(fd.get('dueDay'), 1, 31);
     if (!description) return 'Informe a descrição.'; if (!amount || amount <= 0) return 'Informe um valor válido.';
-    if (!dueDay) return 'Dia de vencimento deve estar entre 1 e 31.'; if (!fd.get('start')) return 'Informe o mês de início.'; if (fd.get('end') && fd.get('end') < fd.get('start')) return 'O mês final não pode ser anterior ao início.';
+    if (!dueDay) return 'Dia de vencimento deve estar entre 1 e 31.'; if (!MONTH_RE.test(fd.get('start'))) return 'Informe o mês de início no formato AAAA-MM.'; if (fd.get('end') && !MONTH_RE.test(fd.get('end'))) return 'Mês final inválido. Use AAAA-MM.'; if (fd.get('end') && fd.get('end') < fd.get('start')) return 'O mês final não pode ser anterior ao início.';
     upsert(state.fixed, { id: f.id || Store.uid(), description, kind: fd.get('kind'), amount, dueDay, start: fd.get('start'), ...(fd.get('end') ? { end: fd.get('end') } : {}), categoryId: fd.get('categoryId'), accountId: fd.get('accountId') });
   });
 }
@@ -274,7 +281,9 @@ Object.assign(actions, {
     if (!confirm('Excluir este cartão?')) return; state.cards = state.cards.filter(c => c.id !== id); await save(); render();
   },
   newPurchase: id => purchaseModal({}, id), editPurchase: id => purchaseModal(find(state.cardTx, id)),
-  async delPurchase(id) { if (!confirm('Excluir esta compra e todas as suas parcelas?')) return; state.cardTx = state.cardTx.filter(p => p.id !== id); await save(); render(); },
+  async delPurchase(id) {
+    if (Fin.installments(state).some(x => x.purchaseId === id && state.invoicePayments.some(p => p.cardId === x.cardId && p.invoice === x.invoice))) return toast('Há pagamento de fatura ligado a esta compra. Desfaça o pagamento antes de excluir.');
+    if (!confirm('Excluir esta compra e todas as suas parcelas?')) return; state.cardTx = state.cardTx.filter(p => p.id !== id); await save(); render(); },
   payInvoice: id => payModal(id),
   async delPayment(id) { if (!confirm('Desfazer este pagamento? O valor volta para a conta.')) return; state.invoicePayments = state.invoicePayments.filter(p => p.id !== id); await save(); render(); },
   newFixed: () => fixedModal(), editFixed: id => fixedModal(find(state.fixed, id)),
@@ -437,8 +446,11 @@ Object.assign(actions, {
     d.showModal();
   },
   async openAtt(id) {
-    const blob = await Store.getFile(id); if (!blob) return toast('Arquivo não encontrado neste navegador.');
-    const url = URL.createObjectURL(blob); window.open(url, '_blank'); setTimeout(() => URL.revokeObjectURL(url), 60000);
+    const w = window.open('', '_blank'); // abre antes do await: depois dele o navegador (Safari/celular) pode bloquear o popup
+    const blob = await Store.getFile(id); if (!blob) { w?.close(); return toast('Arquivo não encontrado neste navegador.'); }
+    const url = URL.createObjectURL(blob);
+    if (w) w.location.href = url; else { const a = document.createElement('a'); a.href = url; a.download = find(state.transactions.find(t => t.attachments?.some(x => x.id === id)).attachments, id).name; a.click(); }
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
 });
 
@@ -464,16 +476,17 @@ views.relatorios = () => {
 const toBlob = url => { const [h, b] = url.split(','), bin = atob(b), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return new Blob([u], { type: h.match(/:(.*?);/)[1] }); };
 const toDataUrl = blob => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
 function backupModal() {
+  const cloud = !$('#logout').hidden; // logado no Firebase: restaurar mexe na conta inteira
   openModal('Backup dos dados', `
-    <p class="label">Último backup: <b>${state.settings.lastBackup ? Fin.fmtDate(state.settings.lastBackup) : 'nunca'}</b>. O arquivo inclui todos os dados e os comprovantes. Guarde-o em local seguro: os dados ficam só neste navegador.</p>
+    <p class="label">Último backup: <b>${state.settings.lastBackup ? Fin.fmtDate(state.settings.lastBackup) : 'nunca'}</b>. O arquivo inclui todos os dados e os comprovantes. Guarde-o em local seguro.${cloud ? '' : ' Os dados ficam só neste navegador.'}</p>
     <p><button type="button" class="btn primary" data-action="exportBackup">⬇ Exportar backup (.json)</button></p>
     <label>Restaurar a partir de um arquivo de backup<input type="file" name="file" accept=".json,application/json"></label>
-    <p class="label">Restaurar substitui todos os dados atuais deste navegador.</p>`, async fd => {
+    <p class="label">Restaurar substitui todos os dados atuais ${cloud ? 'da sua conta, em todos os seus dispositivos' : 'deste navegador'}.</p>`, async fd => {
     const file = fd.get('file'); if (!file || !file.size) return 'Selecione um arquivo de backup para restaurar.';
     let data; try { data = JSON.parse(await file.text()); } catch { return 'Arquivo inválido: não é um JSON.'; }
     const s = data?.state;
-    if (data?.app !== 'finansmart' || !s || !['accounts', 'categories', 'transactions'].every(k => Array.isArray(s[k]))) return 'Este arquivo não é um backup do FinanSmart.';
-    if (!confirm('Restaurar este backup vai SUBSTITUIR todos os dados atuais. Continuar?')) return 'Restauração cancelada.';
+    if (data?.app !== 'finansmart' || !s || !['accounts', 'categories', 'transactions'].every(k => Array.isArray(s[k])) || !['cards', 'cardTx', 'invoicePayments', 'fixed', 'investments', 'invTx', 'budgets', 'goals'].every(k => s[k] === undefined || Array.isArray(s[k]))) return 'Este arquivo não é um backup do FinanSmart.';
+    if (!confirm(cloud ? 'Restaurar este backup vai SUBSTITUIR todos os dados da sua conta, em todos os dispositivos. Continuar?' : 'Restaurar este backup vai SUBSTITUIR todos os dados atuais. Continuar?')) return 'Restauração cancelada.';
     for (const t of state.transactions) for (const a of t.attachments || []) await Store.delFile(a.id);
     for (const [id, url] of Object.entries(data.files || {})) await Store.putFile(id, toBlob(url));
     state = s; state.settings ||= { theme: 'light' }; migrate(); applyTheme(); toast('Backup restaurado.', true);
@@ -492,7 +505,44 @@ Object.assign(actions, {
   printReport() { const t = document.title; document.title = `FinanSmart-relatorio-${ui.month}`; window.print(); document.title = t; }
 });
 
-$('#monthlabel').addEventListener('change', e => { if (e.target.value) { ui.month = e.target.value; render(); } });
+/* ---------- Categorias personalizadas ---------- */
+titles.categorias = 'Categorias';
+const catUse = id => state.transactions.filter(t => t.categoryId === id).length + state.cardTx.filter(p => p.categoryId === id).length + state.fixed.filter(f => f.categoryId === id).length + state.budgets.filter(b => b.categoryId === id).length;
+const isDefaultCat = c => c.name.startsWith('Outras'); // "Outras..." é o destino padrão de importações e exclusões: não se edita nem exclui
+views.categorias = () => {
+  const sec = (kind, label) => `<div class="card"><h3>${label}</h3>${state.categories.filter(c => c.kind === kind).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR')).map(c =>
+    `<div class="row" style="margin-bottom:12px"><span>${esc(c.name)} <span class="label">${catUse(c.id)} uso(s)</span></span><span>${isDefaultCat(c) ? '<span class="pill">Padrão</span>' : `<button class="btn sm" data-action="editCat" data-id="${c.id}">Editar</button> <button class="btn sm danger" data-action="delCat" data-id="${c.id}">Excluir</button>`}</span></div>`).join('')}</div>`;
+  return `<div class="head"><span class="sp"></span><button class="btn primary" data-action="newCat">+ Nova categoria</button></div><section class="grid two">${sec('expense', 'Despesas')}${sec('income', 'Receitas')}</section>`;
+};
+function catModal(c = {}) {
+  openModal(c.id ? 'Editar categoria' : 'Nova categoria', `<label>Nome<input name="name" maxlength="30" value="${esc(c.name || '')}"></label>${c.id ? '' : `<label>Tipo<select name="kind">${opts([['expense', 'Despesa'], ['income', 'Receita']], 'expense')}</select></label>`}`, async fd => {
+    const name = fd.get('name').trim(), kind = c.id ? c.kind : fd.get('kind');
+    if (!name) return 'Informe o nome da categoria.';
+    if (/^outras/.test(Importer.norm(name))) return 'Nomes iniciados em "Outras" são reservados.';
+    if (state.categories.some(x => x.kind === kind && x.id !== c.id && Importer.norm(x.name) === Importer.norm(name))) return 'Já existe uma categoria com esse nome.';
+    upsert(state.categories, { id: c.id || Store.uid(), kind, name });
+  });
+}
+Object.assign(actions, {
+  newCat: () => catModal(),
+  editCat(id) { const c = find(state.categories, id); if (c && !isDefaultCat(c)) catModal(c); },
+  async delCat(id) {
+    const c = find(state.categories, id); if (!c) return;
+    const fb = state.categories.find(x => x.kind === c.kind && x.id !== id && isDefaultCat(x));
+    if (isDefaultCat(c) || !fb) return toast('Esta categoria não pode ser excluída.');
+    const n = catUse(id), nb = state.budgets.filter(b => b.categoryId === id).length;
+    if (!confirm(n ? `Esta categoria é usada em ${n} item(ns). Eles serão movidos para "${fb.name}"${nb ? ' e o orçamento dela será removido' : ''}. Continuar?` : 'Excluir esta categoria?')) return;
+    for (const list of [state.transactions, state.cardTx, state.fixed]) for (const x of list) if (x.categoryId === id) x.categoryId = fb.id;
+    state.budgets = state.budgets.filter(b => b.categoryId !== id); state.categories = state.categories.filter(x => x.id !== id);
+    await save(); render();
+  }
+});
+
+/* ---------- Seletor de mês (Firefox/Safari desktop não têm input month) ---------- */
+const MONTH_OK = (() => { const i = document.createElement('input'); i.type = 'month'; return i.type === 'month'; })();
+const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const ml = $('#monthlabel'); if (!MONTH_OK) { ml.type = 'text'; ml.placeholder = 'AAAA-MM'; ml.maxLength = 7; ml.size = 8; }
+ml.addEventListener('change', e => { if (MONTH_RE.test(e.target.value)) ui.month = e.target.value; render(); });
 
 document.addEventListener('click', e => { const el = e.target.closest('[data-action]'); if (el) actions[el.dataset.action]?.(el.dataset.id); });
 document.addEventListener('input', e => {

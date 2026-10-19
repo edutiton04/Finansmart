@@ -1,4 +1,5 @@
 /* Regras financeiras puras (sem DOM). Todos os valores em CENTAVOS (inteiros). */
+const _instCache = new WeakMap(); // parcelas calculadas uma vez por estado; Fin.invalidate(state) depois de qualquer alteração
 const Fin = {
   parseMoney(str) {
     let s = String(str ?? '').trim().replace(/[R$\s]/g, '');
@@ -61,14 +62,16 @@ const Fin = {
   },
   dueDate(item, ym) { const [y, m] = ym.split('-').map(Number); return `${ym}-${String(Math.min(item.dueDay, new Date(y, m, 0).getDate())).padStart(2, '0')}`; },
   splitInstallments(total, n) { const base = Math.floor(total / n), rest = total - base * n; return Array.from({ length: n }, (_, i) => base + (i < rest ? 1 : 0)); },
+  invalidate: state => _instCache.delete(state),
   installments(state) {
+    const hit = _instCache.get(state); if (hit) return hit;
     const out = [];
     for (const p of state.cardTx || []) {
       const card = state.cards.find(c => c.id === p.cardId); if (!card) continue;
-      const first = Fin.invoiceKey(card, p.date);
+      const first = p.first || Fin.invoiceKey(card, p.date); // p.first: fatura gravada na compra; mudar fechamento/vencimento do cartão não move compras antigas
       Fin.splitInstallments(p.total, p.installments).forEach((amount, i) => out.push({ purchaseId: p.id, cardId: p.cardId, invoice: Fin.shiftMonth(first, i), amount, n: i + 1, of: p.installments, description: p.description, categoryId: p.categoryId, date: p.date }));
     }
-    return out;
+    _instCache.set(state, out); return out;
   },
   invoice(state, cardId, ym) {
     const items = Fin.installments(state).filter(x => x.cardId === cardId && x.invoice === ym);
