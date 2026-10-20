@@ -18,12 +18,22 @@ const migrate = () => {
   for (const p of state.cardTx) if (!p.first) { const c = state.cards.find(x => x.id === p.cardId); if (c) p.first = Fin.invoiceKey(c, p.date); } // fixa a fatura de compras antigas
 };
 migrate();
-const ui = { month: Fin.currentMonth(), f: { type: '', cat: '', acc: '', q: '' } };
+const ui = { month: Fin.currentMonth(), f: { type: '', cat: '', acc: '', q: '', sort: 'date-desc' },
+  fx: { cat: '', sort: 'date-asc' }, cd: { cat: '', sort: 'date-desc' } }; // fx = filtros dos fixos, cd = filtros dos cartões
 const toast = (msg, ok) => { const t = $('#toast'); t.textContent = msg; t.style.background = ok ? 'var(--inc)' : 'var(--exp)'; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3500); };
 const save = async () => { Fin.invalidate(state); if (!(await Store.save(state))) toast('Não foi possível salvar os dados. Verifique a conexão e tente de novo.'); };
 const catName = id => state.categories.find(c => c.id === id)?.name || 'Sem categoria';
 const accName = id => state.accounts.find(a => a.id === id)?.name || '—';
 const byDate = (a, b) => b.date.localeCompare(a.date);
+const SORTS = [['date-desc', 'Data: mais recente'], ['date-asc', 'Data: mais antiga'], ['amount-desc', 'Valor: maior'], ['amount-asc', 'Valor: menor']];
+const sortOpts = sel => SORTS.map(([k, v]) => `<option value="${k}" ${sel === k ? 'selected' : ''}>${v}</option>`).join('');
+const sorter = (sort, getDate, getAmount) => (a, b) => { const [k, dir] = sort.split('-'), r = k === 'amount' ? getAmount(a) - getAmount(b) : getDate(a).localeCompare(getDate(b)); return dir === 'asc' ? r : -r; };
+// Barra de filtro por categoria + ordenação dos Fixos e Cartões (só despesas). scope: 'fx' | 'cd'
+const catSortBar = scope => {
+  const f = ui[scope]; if (f.cat && !state.categories.some(c => c.id === f.cat)) f.cat = ''; // categoria excluída: limpa o filtro
+  return `<div class="filters"><select data-scope="${scope}" data-k="cat" aria-label="Filtrar por categoria"><option value="">Todas as categorias</option>${state.categories.filter(c => c.kind === 'expense').map(c => `<option value="${c.id}" ${f.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+    <select data-scope="${scope}" data-k="sort" aria-label="Ordenar por">${sortOpts(f.sort)}</select></div>`;
+};
 const money = (c, cls = '') => `<span class="${cls}">${Fin.fmt(c)}</span>`;
 const applyTheme = () => document.documentElement.dataset.theme = state.settings.theme;
 
@@ -65,6 +75,7 @@ const views = {
       <select data-filter="type"><option value="">Todos os tipos</option>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}" ${f.type === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
       <select data-filter="cat"><option value="">Todas as categorias</option>${state.categories.map(c => `<option value="${c.id}" ${f.cat === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
       <select data-filter="acc"><option value="">Todas as contas</option>${state.accounts.map(a => `<option value="${a.id}" ${f.acc === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}</select>
+      <select data-filter="sort" aria-label="Ordenar por">${sortOpts(f.sort)}</select>
     </div><div class="card" id="txlist">${txListHtml()}</div>`;
   },
   contas() {
@@ -77,7 +88,7 @@ const views = {
 function txListHtml() {
   const f = ui.f, q = f.q.toLowerCase();
   const list = state.transactions.filter(t => t.date.startsWith(ui.month) && (!f.type || t.type === f.type) && (!f.cat || t.categoryId === f.cat)
-    && (!f.acc || t.accountId === f.acc || t.toAccountId === f.acc) && (!q || t.description.toLowerCase().includes(q))).sort(byDate);
+    && (!f.acc || t.accountId === f.acc || t.toAccountId === f.acc) && (!q || t.description.toLowerCase().includes(q))).sort(sorter(f.sort, t => t.date, t => t.amount));
   return txTable(list, true);
 }
 const titles = { dashboard: 'Dashboard', movimentacoes: 'Movimentações', contas: 'Contas bancárias' };
@@ -183,8 +194,10 @@ const upsert = (arr, o) => { const i = arr.findIndex(x => x.id === o.id); i >= 0
 views.cartoes = () => {
   const head = `<div class="head"><span class="sp"></span><button class="btn" data-action="newPurchase">+ Compra no cartão</button><button class="btn primary" data-action="newCard">+ Novo cartão</button></div>`;
   if (!state.cards.length) return head + '<div class="card empty">Cadastre seu primeiro cartão de crédito.</div>';
-  return head + state.cards.map(c => {
+  const cl = ui.cd, cmp = sorter(cl.sort, x => x.date, x => x.amount);
+  return head + catSortBar('cd') + state.cards.map(c => {
     const inv = Fin.invoice(state, c.id, ui.month), used = Fin.cardUsed(state, c.id);
+    const shown = inv.items.filter(x => !cl.cat || x.categoryId === cl.cat).sort(cmp);
     const status = inv.total === 0 ? '' : inv.open === 0 ? '<span class="pill inc">Paga</span>' : Fin.dueDate(c, ui.month) < Fin.today() ? '<span class="pill exp">Vencida</span>' : '<span class="pill">Em aberto</span>';
     return `<div class="card" style="margin-bottom:16px"><div class="head"><div class="sp"><h3 style="margin:0">${esc(c.name)}</h3><div class="label">Fecha dia ${c.closeDay} · vence dia ${c.dueDay} · limite ${Fin.fmt(c.limit)}</div></div>
       <button class="btn sm" data-action="editCard" data-id="${c.id}">Editar</button><button class="btn sm danger" data-action="delCard" data-id="${c.id}">Excluir</button></div>
@@ -192,14 +205,16 @@ views.cartoes = () => {
       <div class="head"><div class="sp"><h3 style="margin:0">Fatura com vencimento em ${Fin.fmtDate(Fin.dueDate(c, ui.month))} ${status}</h3>
         <div class="label">Total ${Fin.fmt(inv.total)} · Pago ${Fin.fmt(inv.paid)} · Em aberto <b>${Fin.fmt(inv.open)}</b></div></div>
         <button class="btn sm" data-action="newPurchase" data-id="${c.id}">+ Compra</button>${inv.open > 0 ? `<button class="btn sm primary" data-action="payInvoice" data-id="${c.id}">Pagar fatura</button>` : ''}</div>
-      ${inv.items.length ? `<div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Parcela</th><th>Categoria</th><th class="r">Valor</th><th></th></tr></thead><tbody>${inv.items.map(x => `<tr><td>${Fin.fmtDate(x.date)}</td><td>${esc(x.description)}</td><td>${x.n}/${x.of}</td><td>${esc(catName(x.categoryId))}</td><td class="r exp"><b>${Fin.fmt(x.amount)}</b></td>
-        <td class="r"><button class="btn sm" data-action="editPurchase" data-id="${x.purchaseId}">Editar</button> <button class="btn sm danger" data-action="delPurchase" data-id="${x.purchaseId}">Excluir</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">Sem compras nesta fatura.</div>'}
+      ${shown.length ? `<div class="tablewrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Parcela</th><th>Categoria</th><th class="r">Valor</th><th></th></tr></thead><tbody>${shown.map(x => `<tr><td>${Fin.fmtDate(x.date)}</td><td>${esc(x.description)}</td><td>${x.n}/${x.of}</td><td>${esc(catName(x.categoryId))}</td><td class="r exp"><b>${Fin.fmt(x.amount)}</b></td>
+        <td class="r"><button class="btn sm" data-action="editPurchase" data-id="${x.purchaseId}">Editar</button> <button class="btn sm danger" data-action="delPurchase" data-id="${x.purchaseId}">Excluir</button></td></tr>`).join('')}</tbody></table></div>` : `<div class="empty">${inv.items.length ? 'Nenhuma compra desta categoria nesta fatura.' : 'Sem compras nesta fatura.'}</div>`}
       ${inv.payments.map(p => `<div class="row" style="margin-top:8px"><span>✔ Pagamento em ${Fin.fmtDate(p.date)} (${esc(accName(p.accountId))})</span><span><b>${Fin.fmt(p.amount)}</b> <button class="btn sm danger" data-action="delPayment" data-id="${p.id}">Desfazer</button></span></div>`).join('')}</div>`;
   }).join('');
 };
 
 views.fixos = () => {
-  const list = state.fixed.filter(f => f.start <= ui.month && (!f.end || f.end >= ui.month)).sort((a, b) => a.dueDay - b.dueDay);
+  const fl = ui.fx, amountOf = f => Fin.fixedPaid(state, f, ui.month)?.amount ?? f.amount;
+  const all = state.fixed.filter(f => f.start <= ui.month && (!f.end || f.end >= ui.month));
+  const list = all.filter(f => !fl.cat || f.categoryId === fl.cat).sort(sorter(fl.sort, f => Fin.dueDate(f, ui.month), amountOf));
   let planned = 0, paid = 0;
   const rows = list.map(f => {
     const due = Fin.dueDate(f, ui.month), tx = Fin.fixedPaid(state, f, ui.month); planned += tx ? tx.amount : f.amount; if (tx) paid += tx.amount;
@@ -209,7 +224,7 @@ views.fixos = () => {
   }).join('');
   return `<div class="head"><span class="sp"></span><button class="btn primary" data-action="newFixed">+ Novo gasto fixo</button></div>
     <section class="grid cards">${card('Previsto no mês', planned)}${card('Pago', paid, 'inc')}${card('Pendente', planned - paid, 'exp')}</section>
-    <div class="card">${list.length ? `<div class="tablewrap"><table><thead><tr><th>Descrição</th><th>Tipo</th><th>Vencimento</th><th>Categoria</th><th class="r">Valor</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="empty">Nenhum gasto fixo neste mês.</div>'}</div>`;
+    ${catSortBar('fx')}<div class="card">${list.length ? `<div class="tablewrap"><table><thead><tr><th>Descrição</th><th>Tipo</th><th>Vencimento</th><th>Categoria</th><th class="r">Valor</th><th>Status</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">${all.length ? 'Nenhum gasto fixo nesta categoria.' : 'Nenhum gasto fixo neste mês.'}</div>`}</div>`;
 };
 
 function cardModal(c = {}) {
@@ -546,6 +561,7 @@ ml.addEventListener('change', e => { if (MONTH_RE.test(e.target.value)) ui.month
 
 document.addEventListener('click', e => { const el = e.target.closest('[data-action]'); if (el) actions[el.dataset.action]?.(el.dataset.id); });
 document.addEventListener('input', e => {
+  const sc = e.target.dataset.scope; if (sc && ui[sc]) { ui[sc][e.target.dataset.k] = e.target.value; render(); return; }
   const k = e.target.dataset.filter; if (!k) return;
   ui.f[k] = e.target.value; $('#txlist').innerHTML = txListHtml();
 });
