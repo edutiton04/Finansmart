@@ -7,32 +7,36 @@
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<aside class="side">
-  <div class="brand">Finan<span>Smart</span></div>
-  <nav class="nav">
-    <a href="#dashboard" data-r="dashboard">📊 <b>Dashboard</b></a>
-    <a href="#movimentacoes" data-r="movimentacoes">💸 <b>Movimentações</b></a>
-    <a href="#contas" data-r="contas">🏦 <b>Contas</b></a>
-    <a href="#cartoes" data-r="cartoes">💳 <b>Cartões</b></a>
-    <a href="#fixos" data-r="fixos">🔁 <b>Fixos</b></a>
-    <a href="#investimentos" data-r="investimentos">📈 <b>Investimentos</b></a>
-    <a href="#planejamento" data-r="planejamento">🎯 <b>Planejamento</b></a>
-    <a href="#relatorios" data-r="relatorios">📑 <b>Relatórios</b></a>
-  </nav>
-</aside>
-<main>
-  <header class="top">
-    <h1 id="title">Dashboard</h1>
-    <div class="monthnav" id="monthnav">
-      <button class="btn ghost" data-action="prevMonth" aria-label="Mês anterior">‹</button>
-      <input type="month" id="monthlabel" aria-label="Escolher mês">
-      <button class="btn ghost" data-action="nextMonth" aria-label="Próximo mês">›</button>
+<header class="site" id="site">
+  <div class="site-in">
+    <div class="logo"><span class="seal" aria-hidden="true">F</span><span class="logotxt"><b>FinanSmart</b><small>Gestão financeira pessoal</small></span></div>
+    <div class="tools">
+      <button class="btn ghost icon" data-action="backup" aria-label="Backup" title="Backup">💾</button>
+      <button class="btn ghost icon" data-action="theme" aria-label="Alternar tema" title="Alternar tema">🌓</button>
+      <button class="btn ghost sm" id="logout" hidden>Sair</button>
     </div>
-    <button class="btn ghost" data-action="backup" aria-label="Backup" title="Backup">💾</button>
-    <button class="btn ghost" data-action="theme" aria-label="Alternar tema">🌓</button>
-    <button class="btn ghost" id="logout" hidden>Sair</button>
-  </header>
-  <!-- Prévia decorativa (sem dados reais): aparece desfocada atrás do login e é substituída pelo app. -->
+  </div>
+  <nav class="nav" aria-label="Seções">
+    <a href="#dashboard" data-r="dashboard"><b>Dashboard</b></a>
+    <a href="#movimentacoes" data-r="movimentacoes"><b>Movimentações</b></a>
+    <a href="#contas" data-r="contas"><b>Contas</b></a>
+    <a href="#cartoes" data-r="cartoes"><b>Cartões</b></a>
+    <a href="#fixos" data-r="fixos"><b>Fixos</b></a>
+    <a href="#investimentos" data-r="investimentos"><b>Investimentos</b></a>
+    <a href="#planejamento" data-r="planejamento"><b>Planejamento</b></a>
+    <a href="#relatorios" data-r="relatorios"><b>Relatórios</b></a>
+  </nav>
+</header>
+<main>
+  <div class="pagehead">
+    <div><small class="eyebrow" id="eyebrow">Visão geral</small><h1 id="title">Dashboard</h1></div>
+    <div class="monthnav" id="monthnav">
+      <button class="btn ghost icon" data-action="prevMonth" aria-label="Mês anterior">‹</button>
+      <input type="month" id="monthlabel" aria-label="Escolher mês">
+      <button class="btn ghost icon" data-action="nextMonth" aria-label="Próximo mês">›</button>
+    </div>
+  </div>
+<!-- Prévia decorativa (sem dados reais): aparece desfocada atrás do login e é substituída pelo app. -->
   <div id="view">
     <section class="grid cards">
       <div class="card"><div class="label">Saldo disponível</div><div class="value">R$ 12.480,00</div></div>
@@ -75,6 +79,10 @@
 <script src="firebase-config.js" onerror="(window.__missing=window.__missing||[]).push('firebase-config.js')"></script>
 <script src="firebase-adapter.js" onerror="(window.__missing=window.__missing||[]).push('firebase-adapter.js')"></script>
 <script src="boot.js" onerror="(window.__missing=window.__missing||[]).push('boot.js')"></script>
+<script>
+/* Sombra escalonada no cabeçalho ao rolar */
+(function(){var s=document.getElementById('site');function f(){s.classList.toggle('scrolled',window.scrollY>4)}addEventListener('scroll',f,{passive:true});f();})();
+</script>
 <script>
 /* Aviso de diagnóstico: se o app não iniciar, mostra quais arquivos não foram encontrados no site. */
 setTimeout(function () {

@@ -20,7 +20,7 @@ const migrate = () => {
 migrate();
 const ui = { month: Fin.currentMonth(), f: { type: '', cat: '', acc: '', q: '', sort: 'date-desc' },
   fx: { cat: '', sort: 'date-asc' }, cd: { cat: '', sort: 'date-desc' } }; // fx = filtros dos fixos, cd = filtros dos cartões
-const toast = (msg, ok) => { const t = $('#toast'); t.textContent = msg; t.style.background = ok ? 'var(--inc)' : 'var(--exp)'; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3500); };
+const toast = (msg, ok) => { const t = $('#toast'); t.textContent = msg; t.className = ok ? 'ok' : ''; t.style.display = 'block'; setTimeout(() => t.style.display = 'none', 3500); };
 const save = async () => { Fin.invalidate(state); if (!(await Store.save(state))) toast('Não foi possível salvar os dados. Verifique a conexão e tente de novo.'); };
 const catName = id => state.categories.find(c => c.id === id)?.name || 'Sem categoria';
 const accName = id => state.accounts.find(a => a.id === id)?.name || '—';
@@ -96,7 +96,7 @@ function render() {
   Fin.invalidate(state);
   const r = views[location.hash.slice(1)] ? location.hash.slice(1) : 'dashboard';
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.r === r));
-  $('#title').textContent = titles[r]; $('#monthnav').hidden = r === 'contas' || r === 'categorias';
+  $('#title').textContent = titles[r]; $('#eyebrow').textContent = r === 'contas' || r === 'categorias' ? 'Cadastro' : Fin.monthLabel(ui.month); $('#monthnav').hidden = r === 'contas' || r === 'categorias';
   $('#monthlabel').value = ui.month; $('#view').innerHTML = views[r]();
 }
 
